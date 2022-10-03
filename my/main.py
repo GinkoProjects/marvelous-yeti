@@ -10,16 +10,14 @@ from pathlib import Path
 from typing import Union
 
 from my.commands import (HIDDEN_ARGUMENT, OPTIONAL_ARGUMENT, REQUIRED_ARGUMENT,
-                         Command, CommandBinaryMode, OpenLink, OpenLinkKiosk,
-                         Print, SequentialProcessRunner, StdinConverter)
-from my.plugins import plugins
-from my.plugins import rg_commands as rgc
+                         Command, CommandBinaryMode, Print,
+                         SequentialProcessRunner, StdinConverter)
+from my.plugins import loader
 
 logger = logging.getLogger(__name__)
 
 
-def run_process(process_name, args):
-    p = PROCESSES[process_name]
+def run_process(process, args):
     prefix = ""
     args_dict = vars(args)
     if args.output_file:
@@ -34,14 +32,14 @@ def run_process(process_name, args):
         debug_file_context = contextlib.nullcontext(sys.stderr)
 
     with open_file_context as f, debug_file_context as debug_out:
-        for l in p.prepare(**args_dict).run(stdin=sys.stdin, stdout=debug_out, **args_dict):
+        for l in process.prepare(**args_dict).run(stdin=sys.stdin, stdout=debug_out, **args_dict):
             print(prefix, l, sep="", file=f)
 
 
 def run_process_cli(args):
-    process_name = args.name
     if not args.background:
-        run_process(process_name, args)
+        process = args.retrieve_func(args.function_name)
+        run_process(process, args)
     else:
         new_args = [arg for arg in sys.orig_argv if arg not in ["--bg", "--background"]]
         std_redir = {"stdin": subprocess.DEVNULL}
@@ -81,14 +79,11 @@ def create_argument_parser() -> ArgumentParser:
         help="Where to print the intermediate steps",
     )
 
-    # subparsers = parser.add_subparsers(help="possible commands")
     # run_parser = subparsers.add_parser("run", help="Run processes")
-    process_subparsers = parser.add_subparsers(dest="name", metavar="command")
-    for process_name, process in PROCESSES.items():
-        process_parser = process_subparsers.add_parser(
-            process_name, help=f"Handled by {process}", parents=[process_config_parser]
-        )
-        process.add_arguments(process_parser, add_all_fields=True)
+    # process_subparsers = parser.add_subparsers(dest="name", metavar="command")
+    for plug_name, plug in loader.plugins.items():
+        # process_parser = process_subparsers.add_parser(plug_name, parents=[process_config_parser])
+        plug.add_arguments(parser, process_parser_kwargs={"parents": [process_config_parser]}, add_all_fields=True)
 
     parser.set_defaults(func=run_process_cli)
 

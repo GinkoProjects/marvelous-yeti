@@ -4,6 +4,7 @@ version = "0.1.0"
 description = ""
 authors = ["Romain Gehrig <romain.gehrig@gmail.com>"]
 readme = "README.md"
+packages = [{include = "my"}]
 
 [tool.poetry.scripts]
 my = "my.main:main"
