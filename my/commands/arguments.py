@@ -116,7 +116,7 @@ class ExposeArguments:
                 getattr(self, f.name).add_arguments(parser, add_all_fields=add_all_fields)
 
     def _arguments(
-        self, add_all_fields: Union[bool, Callable[[TExpose, Field[Any]], bool]] = True
+        self, add_all_fields: Union[bool, Callable[[TExpose, Field], bool]] = True
     ) -> Dict[str, Dict[str, Any]]:
         """
         Create arguments from metaclass fields
