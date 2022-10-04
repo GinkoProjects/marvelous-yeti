@@ -92,7 +92,7 @@ class CommandProcessRunner(ProcessRunner):
 
         return " ".join(args)
 
-    def _run_async(self, /, stdin=None, stdout=None, **kwargs) -> Tuple[subprocess.Popen, IO | None, IO | None]:
+    def _run_async(self, /, stdin=None, stdout=None, **kwargs) -> Tuple[subprocess.Popen, Optional[IO], Optional[IO]]:
         complete_cmd = self.prepare_cmd(**kwargs)
 
         # See complete documentation https://docs.python.org/3/library/subprocess.html#subprocess.Popen

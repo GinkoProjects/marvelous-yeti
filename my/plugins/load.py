@@ -47,7 +47,7 @@ class NamedTree(Generic[T]):
         if self.config.expose_leafs_items:
             setattr(self, name, self.config.item_value(item))
 
-    def add_item(self, item: T, hierarchy: List[str] | None) -> Tuple[Optional[str], "NamedTree"]:
+    def add_item(self, item: T, hierarchy: Optional[List[str]]) -> Tuple[Optional[str], "NamedTree"]:
         self._expose_item(item, only_attr=bool(hierarchy))
         if not hierarchy:
             return None, self
@@ -162,13 +162,13 @@ class Plugin:
         if group_name and not hasattr(self, group_name):
             setattr(self, group_name, group)
 
-    def hierarchy_for_process(self, process: ExternalProcess) -> List[str] | None:
+    def hierarchy_for_process(self, process: ExternalProcess) -> Optional[List[str]]:
         if process.export_path:
             return process.export_path.split(".")
         else:
             return None
 
-    def hierarchy_for_command(self, cmd: ExternalCommand) -> List[str] | None:
+    def hierarchy_for_command(self, cmd: ExternalCommand) -> Optional[List[str]]:
         if cmd.export_path:
             return cmd.export_path.split(".")
         else:
