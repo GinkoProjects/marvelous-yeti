@@ -10,7 +10,7 @@ packages = [{include = "my"}]
 my = "my.main:main"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.8"
 importlib-metadata = {version = "^5.0.0", python = "<3.10"}
 
 [tool.poetry.group.dev.dependencies]
