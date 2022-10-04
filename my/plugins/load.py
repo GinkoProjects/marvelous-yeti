@@ -3,6 +3,7 @@ import sys
 from argparse import ArgumentParser
 from collections import defaultdict
 from dataclasses import dataclass, field
+from io import StringIO
 from typing import (Any, Callable, Dict, Generator, Generic, List, Optional,
                     Tuple, Type, TypeVar)
 
@@ -224,7 +225,7 @@ class PluginLoader:
 
         process_name, hierarchy = self.get_name_and_hierarchy_from_entrypoint(proc_entrypoint)
 
-        export_path = ".".join(hierarchy)  # TODO Use export path to construct groups
+        export_path = ".".join(hierarchy)
         proc = ExternalProcess(name=process_name, process=process, export_path=export_path)
 
         plugin.add_process(proc)
@@ -256,8 +257,34 @@ class PluginLoader:
             # process.export_path =
             plugin.add_process(process)
 
+    def processes_tree(self) -> str:
+        out = StringIO()
+        # chars = "│├└─"
+        chars = "    "
 
-if __name__ == "__main__":
-    from pprint import pprint
+        def indent(depth: int) -> str:
+            return f"{chars[0]}  " * depth
 
-    pprint({pname: p.as_dict() for pname, p in plugin_loader.plugins.items()})
+        def print_group(grp, depth: int):
+            # Print name
+            if depth != 0:
+                print(indent(depth), " ", grp["name"], sep="", file=out)
+            # Print items
+            last_item_num = len(grp["items"])
+            for i, item in enumerate(grp["items"], start=1):
+                print(indent(depth), chars[2] if last_item_num else chars[1], chars[3] * 2, " ", item, sep="", file=out)
+
+            # Print subgroups
+            for k, val in grp.items():
+                if k in ["name", "items"]:
+                    continue
+
+                print_group(val, depth + 1)
+
+        for plug_name, plug in self.plugins.items():
+            print(plug.name, file=out)
+            proc_dict = plug._processes.as_dict()
+
+            print_group(proc_dict, depth=0)
+
+        return out.getvalue()
