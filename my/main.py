@@ -73,6 +73,13 @@ def create_argument_parser() -> ArgumentParser:
         "--output-file", "--out", type=lambda p: Path(p).expanduser(), help="File to store the process output."
     )
     process_config_parser.add_argument(
+        "--stdout",
+        action="store_const",
+        dest="output_file",
+        const=Path("/dev/stdout"),
+        help="Output to stdout directly",
+    )
+    process_config_parser.add_argument(
         "--debug-output",
         default="/dev/null",
         type=lambda p: Path(p).expanduser(),
