@@ -403,6 +403,33 @@ def test_cannot_hide_argument_type():
         cmd.with_arguments()
 
 
+def test_default_factory_is_not_given_to_argparse():
+    @dataclass
+    class A(ExposeArguments):
+        default_argument: int = args(default_factory=lambda: 1 + 2)
+
+    cmd = A(default_argument=OPTIONAL_ARGUMENT)
+    parser = argparse.ArgumentParser()
+    cmd.add_arguments(parser, add_all_fields=True)
+
+    assert cmd.with_arguments(**vars(parser.parse_args([]))).default_argument == 3
+
+
+@pytest.mark.skip("Need to evaluate if it makes sense")
+def test_with_argument_with_no_argument_should_return_the_class_default_values():
+    @dataclass
+    class A(ExposeArguments):
+        req_arg: int
+        default_argument: int = args(default_factory=lambda: 1 + 2)
+        default_arg2: str = args(default="nails")
+
+    cmd = A(req_arg=2, default_argument=OPTIONAL_ARGUMENT)
+
+    assert cmd.with_arguments(req_arg=12).req_arg == 12
+    assert cmd.with_arguments().default_argument == 3
+    assert cmd.with_arguments().default_arg2 == "nails"
+
+
 # TODO Test that default argument is found
 # TODO Test that args() adds type, default, default_factory,...
 # TODO Test that simple default argument has {"args": ("<arg_name>",)} in _arguments

@@ -168,6 +168,10 @@ class ExposeArguments:
             # We have actual metadata on the field so we use it
             if ARGPARSE_METADATA_NAME in f.metadata:
                 argparse_args = deepcopy(f.metadata[ARGPARSE_METADATA_NAME])
+                # We already have the default value and argparse does not use the default_factory, so
+                # we delete this attribute
+                if "default_factory" in argparse_args["kwargs"]:
+                    del argparse_args["kwargs"]["default_factory"]
             else:
                 # We construct some basic arguments
                 argparse_args = {"args": [], "exclude": False, "kwargs": {"default": field_val}}
