@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "marvelous-yeti"
+name = "my-yeti"
 version = "0.1.0"
 description = ""
 authors = ["Romain Gehrig <romain.gehrig@gmail.com>"]
