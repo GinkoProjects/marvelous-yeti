@@ -1,15 +1,23 @@
 import argparse
 import sys
+from importlib.resources import read_text
+from pprint import pprint
 
 from dynaconf import Dynaconf
 
 import my.config.my as myconfig
 
 
-def print_config(args):
-    from pprint import pprint
+def default_config() -> str:
+    return read_text("my", "default_config.toml")
 
+
+def print_config(args):
     conf_file = myconfig.user_conf_dir / myconfig.settings_filename
+    if not conf_file.exists():
+        print(f"File {conf_file.as_posix()} does not exist", file=sys.stderr)
+        sys.exit(1)
+
     conf = Dynaconf(
         settings_files=[conf_file],
         load_dotenv=False,
@@ -21,13 +29,21 @@ def print_config(args):
     pprint(my_config.to_dict(), width=80)
 
 
+def print_plugins(args):
+    from my.plugins import plugin_loader
+
+    print("Loaded plugins: ")
+    print(plugin_loader.processes_tree())
+
+
 def init_config(args):
     conf = myconfig.user_conf_dir / myconfig.settings_filename
     if not myconfig.user_conf_dir.exists():
         myconfig.user_conf_dir.mkdir(parents=True)
 
     if not conf.exists():
-        conf.open("w").close()
+        with conf.open("w") as f:
+            f.write(default_config())
         print(f"Configuration created at {conf}")
     elif conf.exists() and conf.is_dir():
         print(f"Path {conf} exists but it is a directory.")
@@ -39,7 +55,7 @@ def init_config(args):
 
 def argparser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Handle config for Marvelous Yeti and plugins",
+        description="Handle config for My Yeti and plugins",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
@@ -51,6 +67,10 @@ def argparser() -> argparse.ArgumentParser:
     # Create new config file
     print_config_parser = actions.add_parser("show")
     print_config_parser.set_defaults(func=print_config)
+
+    # Plugins
+    plugins_config_parser = actions.add_parser("plugins")
+    plugins_config_parser.set_defaults(func=print_plugins)
 
     return parser
 
