@@ -117,21 +117,12 @@ class AttrTree2(Generic[T]):
     def as_list(self) -> List[Tuple[str, T]]:
         return list(self._exposed.items())
 
-    # def add_arguments(
-    #     self, parser: ArgumentParser, path: List[str], process_parser_kwargs: Dict[str, Any] = {}, **kwargs
-    # ):
-    #     this_parser = parser.add_subparsers(title=self.name)
+    def as_dict(self) -> Dict[str, T]:
+        return self._exposed.copy()
 
-    #     # Add exposed
-    #     for process_name, external_process in self.exposed.items():
-    #         process_parser = this_parser.add_parser(process_name, **process_parser_kwargs)
-    #         process_parser.set_defaults(function_name=".".join(path + [process_name]))
-    #         external_process.process.add_arguments(process_parser, **kwargs)
-
-    #     for leaf in self.leafs.values():
-    #         leaf_parser = this_parser.add_parser(leaf.name)
-    #         leaf_parser.set_defaults(function_name=".".join(path + [leaf.name]))
-    #         leaf.add_arguments(leaf_parser, path + [leaf.name], process_parser_kwargs=process_parser_kwargs, **kwargs)
+    def as_tree(self):
+        # TODO
+        pass
 
 @dataclass
 class AttrTree(Generic[T]):
@@ -216,19 +207,3 @@ class AttrTree(Generic[T]):
         for hierarchy, item in self._as_list():
             lst.append((joiner.join(reversed(hierarchy)), item))
         return lst
-
-    def add_arguments(
-        self, parser: ArgumentParser, path: List[str], process_parser_kwargs: Dict[str, Any] = {}, **kwargs
-    ):
-        this_parser = parser.add_subparsers(title=self.name)
-
-        # Add exposed
-        for process_name, external_process in self.exposed.items():
-            process_parser = this_parser.add_parser(process_name, **process_parser_kwargs)
-            process_parser.set_defaults(function_name=".".join(path + [process_name]))
-            external_process.process.add_arguments(process_parser, **kwargs)
-
-        for leaf in self.leafs.values():
-            leaf_parser = this_parser.add_parser(leaf.name)
-            leaf_parser.set_defaults(function_name=".".join(path + [leaf.name]))
-            leaf.add_arguments(leaf_parser, path + [leaf.name], process_parser_kwargs=process_parser_kwargs, **kwargs)

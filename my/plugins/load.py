@@ -1,6 +1,6 @@
 import logging
 import sys
-from argparse import ArgumentParser
+from argparse import ArgumentParser, _SubParsersAction
 from collections import defaultdict
 from dataclasses import dataclass, field
 from io import StringIO
@@ -10,6 +10,7 @@ from typing import (Any, Callable, Dict, Generator, Generic, List, Optional,
 from my.commands import ProcessRunner
 from my.plugins.common import ExternalCommand, ExternalProcess, PluginRegistry
 from my.utils import AttrTree, AttrTreeConfig
+from my.utils.tree import AttrTree2
 
 if sys.version_info < (3, 10):
     from importlib_metadata import EntryPoint, entry_points
@@ -27,13 +28,15 @@ class Plugin:
     module: str  # TODO Is not really the expected module path, see what we can do about it
     _commands: AttrTree[ExternalCommand] = field(
         default_factory=lambda: AttrTree[ExternalCommand](
-            name="__cmds__", config=AttrTreeConfig(expose_leafs_items=True), root=True
+            name="__cmds__",
+            config=AttrTreeConfig(expose_leafs_items=True, item_name=lambda x: x.name, item_value=lambda x: x.cls),
+            root=True,
         ),
         init=False,
     )
-    _processes: AttrTree[ExternalProcess] = field(
-        default_factory=lambda: AttrTree[ExternalProcess](
-            name="__processes__", config=AttrTreeConfig(expose_leafs_items=False), root=True
+    _processes: AttrTree2[ExternalProcess] = field(
+        default_factory=lambda: AttrTree2[ExternalProcess](
+            config=AttrTreeConfig(expose_leafs_items=False, item_name=lambda x: x.name, item_value=lambda x: x.process),
         ),
         init=False,
     )
@@ -44,6 +47,9 @@ class Plugin:
     def __repr__(self) -> str:
         return str(self)
 
+    def __getattr__(self, name):
+        return getattr(self._processes, name)
+
     def add_command(self, cmd: ExternalCommand):
         setattr(self, cmd.cls.__name__, cmd.cls)
         group_name, group = self._commands.add_item(cmd, hierarchy=self.hierarchy_for_command(cmd))
@@ -51,15 +57,11 @@ class Plugin:
             setattr(self, group_name, group)
 
     def add_process(self, process: ExternalProcess):
-        group_name, group = self._processes.add_item(process, hierarchy=self.hierarchy_for_process(process))
-        if group_name and not hasattr(self, group_name):
-            setattr(self, group_name, group)
+        self._processes.add_item(process, path=".".join(self.hierarchy_for_process(process)))
 
-    def hierarchy_for_process(self, process: ExternalProcess) -> Optional[List[str]]:
-        if process.export_path:
-            return process.export_path.split(".")
-        else:
-            return None
+    def hierarchy_for_process(self, process: ExternalProcess) -> List[str]:
+        path = process.export_path or ""
+        return path.split(".")
 
     def hierarchy_for_command(self, cmd: ExternalCommand) -> Optional[List[str]]:
         if cmd.export_path:
@@ -75,7 +77,25 @@ class Plugin:
 
     def add_arguments(self, parser: ArgumentParser, process_parser_kwargs: Dict[str, Any] = {}, **kwargs):
         parser.set_defaults(retrieve_func=lambda func_name: self._processes[func_name].process, function_name=self.name)
-        self._processes.add_arguments(parser, path=[], process_parser_kwargs=process_parser_kwargs, **kwargs)
+
+        parsers_sub: Dict[str, _SubParsersAction] = {'': parser.add_subparsers(title="root")}
+        def get_or_create_module_parser(path: str) -> _SubParsersAction:
+            if path not in parsers_sub:
+                *parents, this = path.rsplit(".", 1)
+                parent_parser = get_or_create_module_parser(parents[0] if parents else "")
+
+                this_parser = parent_parser.add_parser(this, **process_parser_kwargs)
+                this_parser.set_defaults(function_name=path)
+
+                parsers_sub[path] = this_parser.add_subparsers(title=this)
+
+            return parsers_sub[path]
+
+        for process_path, process in self._processes.as_list():
+            *parent, process_name = process_path.rsplit('.', 1)
+            this_parser = get_or_create_module_parser(parent[0] if parent else "")
+            process_parser = this_parser.add_parser(process_name)
+            process.add_arguments(process_parser, **kwargs)
 
 
 @dataclass
