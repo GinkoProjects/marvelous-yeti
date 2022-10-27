@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Set
 import pytest
 
 from my.utils import AttrTree, AttrTreeConfig
-from my.utils.tree import AttrTree2
 
 
 @dataclass
@@ -56,8 +55,8 @@ def dogs(request, simple_dogs, duplicate_dogs):
     return [simple_dogs, duplicate_dogs][request.param]
 
 
-def create_dog_tree(dogs: List[Dog]) -> AttrTree2[Dog]:
-    tree = AttrTree2(
+def create_dog_tree(dogs: List[Dog]) -> AttrTree[Dog]:
+    tree = AttrTree(
         config=AttrTreeConfig(expose_leafs_items=True, item_name=lambda x: x.name, item_value=lambda x: x),
     )
     for dog in dogs:
@@ -65,8 +64,9 @@ def create_dog_tree(dogs: List[Dog]) -> AttrTree2[Dog]:
 
     return tree
 
-def create_dog_tree_no_leaf(dogs: List[Dog]) -> AttrTree2[Dog]:
-    tree = AttrTree2(
+
+def create_dog_tree_no_leaf(dogs: List[Dog]) -> AttrTree[Dog]:
+    tree = AttrTree(
         config=AttrTreeConfig(expose_leafs_items=False, item_name=lambda x: x.name, item_value=lambda x: x),
     )
     for dog in dogs:
@@ -74,9 +74,11 @@ def create_dog_tree_no_leaf(dogs: List[Dog]) -> AttrTree2[Dog]:
 
     return tree
 
+
 @pytest.fixture(params=[0, 1])
 def dog_tree_creator(request):
     return [create_dog_tree, create_dog_tree_no_leaf][request.param]
+
 
 def test_dog_hierarchy():
     assert Dog(name="Abc", race="", age=0).full_name == "Abc"
@@ -95,10 +97,13 @@ def test_length(dogs, dog_tree_creator):
     dog_tree = dog_tree_creator(dogs)
     assert len(dog_tree) == len(dogs)
 
+
 def test_exposed(simple_dogs):
     dog_tree = create_dog_tree_no_leaf(simple_dogs)
-    assert dog_tree.__dir__() == ['Rouky']
-    assert dog_tree.bully.__dir__() == ['frenchy', 'Lucky']
+
+    assert set(["Rouky"]) <= set(dog_tree.__dir__())
+    assert set(["frenchy", "Lucky"]) <= set(dog_tree.bully.__dir__())
+    assert "Lucky" not in dog_tree.__dir__()
 
 
 def test_retrieve_dog_with_full_path(dogs, dog_tree_creator):

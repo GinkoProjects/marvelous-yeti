@@ -10,7 +10,6 @@ from typing import (Any, Callable, Dict, Generator, Generic, List, Optional,
 from my.commands import ProcessRunner
 from my.plugins.common import ExternalCommand, ExternalProcess, PluginRegistry
 from my.utils import AttrTree, AttrTreeConfig
-from my.utils.tree import AttrTree2
 
 if sys.version_info < (3, 10):
     from importlib_metadata import EntryPoint, entry_points
@@ -26,59 +25,62 @@ logger = logging.getLogger(__name__)
 class Plugin:
     name: str
     module: str  # TODO Is not really the expected module path, see what we can do about it
-    _commands: AttrTree[ExternalCommand] = field(
+    commands: AttrTree[ExternalCommand] = field(
         default_factory=lambda: AttrTree[ExternalCommand](
-            name="__cmds__",
             config=AttrTreeConfig(expose_leafs_items=True, item_name=lambda x: x.name, item_value=lambda x: x.cls),
-            root=True,
         ),
         init=False,
     )
-    _processes: AttrTree2[ExternalProcess] = field(
-        default_factory=lambda: AttrTree2[ExternalProcess](
+    processes: AttrTree[ExternalProcess] = field(
+        default_factory=lambda: AttrTree[ExternalProcess](
             config=AttrTreeConfig(expose_leafs_items=False, item_name=lambda x: x.name, item_value=lambda x: x.process),
         ),
         init=False,
     )
 
     def __str__(self) -> str:
-        return f"<Plugin {self.name}: commands={len(self._commands)}, processes={len(self._processes)}>"
+        return f"<Plugin {self.name}: commands={len(self.commands)}, processes={len(self.processes)}>"
 
     def __repr__(self) -> str:
         return str(self)
 
-    def __getattr__(self, name):
-        return getattr(self._processes, name)
+    # def __getattr__(self, name):
+    #     if hasattr(self.processes, name):
+    #         return getattr(self.processes, name)
+    #     else:
+    #         return getattr(self.commands, name)
+
+    # def __dir__(self) -> List[str]:
+    #     d = super().__dir__()
+    #     dp = self.processes.__dir__()
+    #     dc = self.commands.__dir__()
+    #     return d + dp + dc
 
     def add_command(self, cmd: ExternalCommand):
-        setattr(self, cmd.cls.__name__, cmd.cls)
-        group_name, group = self._commands.add_item(cmd, hierarchy=self.hierarchy_for_command(cmd))
-        if group_name and not hasattr(self, group_name):
-            setattr(self, group_name, group)
+        self.commands.add_item(cmd, path=".".join(self.hierarchy_for_command(cmd)))
 
     def add_process(self, process: ExternalProcess):
-        self._processes.add_item(process, path=".".join(self.hierarchy_for_process(process)))
+        self.processes.add_item(process, path=".".join(self.hierarchy_for_process(process)))
 
     def hierarchy_for_process(self, process: ExternalProcess) -> List[str]:
         path = process.export_path or ""
         return path.split(".")
 
-    def hierarchy_for_command(self, cmd: ExternalCommand) -> Optional[List[str]]:
-        if cmd.export_path:
-            return cmd.export_path.split(".")
-        else:
-            return None
+    def hierarchy_for_command(self, cmd: ExternalCommand) -> List[str]:
+        path = cmd.export_path or ""
+        return path.split(".")
 
     def all_commands(self) -> Dict[str, ExternalCommand]:
-        return self._commands.all_items()
+        return self.commands.as_dict()
 
     def as_dict(self) -> Dict[str, Any]:
-        return {"module": self.module, "commands": self._commands.as_dict(), "processes": self._processes.as_dict()}
+        return {"module": self.module, "commands": self.commands.as_dict(), "processes": self.processes.as_dict()}
 
     def add_arguments(self, parser: ArgumentParser, process_parser_kwargs: Dict[str, Any] = {}, **kwargs):
-        parser.set_defaults(retrieve_func=lambda func_name: self._processes[func_name].process, function_name=self.name)
+        parser.set_defaults(retrieve_func=lambda func_name: self.processes[func_name].process, function_name=self.name)
 
-        parsers_sub: Dict[str, _SubParsersAction] = {'': parser.add_subparsers(title="root")}
+        parsers_sub: Dict[str, _SubParsersAction] = {"": parser.add_subparsers(title="actions")}
+
         def get_or_create_module_parser(path: str) -> _SubParsersAction:
             if path not in parsers_sub:
                 *parents, this = path.rsplit(".", 1)
@@ -91,8 +93,8 @@ class Plugin:
 
             return parsers_sub[path]
 
-        for process_path, process in self._processes.as_list():
-            *parent, process_name = process_path.rsplit('.', 1)
+        for process_path, process in self.processes.as_list():
+            *parent, process_name = process_path.rsplit(".", 1)
             this_parser = get_or_create_module_parser(parent[0] if parent else "")
             process_parser = this_parser.add_parser(process_name)
             process.add_arguments(process_parser, **kwargs)
@@ -196,7 +198,7 @@ class PluginLoader:
 
         for plug_name, plug in self.plugins.items():
             print(plug.name, file=out)
-            proc_dict = plug._processes.as_dict()
+            proc_dict = plug.processes.as_dict()
 
             print_group(proc_dict, depth=0)
 
