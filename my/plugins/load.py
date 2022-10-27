@@ -1,6 +1,6 @@
 import logging
 import sys
-from argparse import ArgumentParser
+from argparse import ArgumentParser, _SubParsersAction
 from collections import defaultdict
 from dataclasses import dataclass, field
 from io import StringIO
@@ -9,6 +9,7 @@ from typing import (Any, Callable, Dict, Generator, Generic, List, Optional,
 
 from my.commands import ProcessRunner
 from my.plugins.common import ExternalCommand, ExternalProcess, PluginRegistry
+from my.utils import AttrTree, AttrTreeConfig
 
 if sys.version_info < (3, 10):
     from importlib_metadata import EntryPoint, entry_points
@@ -16,173 +17,87 @@ else:
     from importlib.metadata import EntryPoint, entry_points
 
 TProcessRunner = TypeVar("TProcessRunner", bound="ProcessRunner")
-T = TypeVar("T")
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class NamedTreeConfig(Generic[T]):
-    expose_leafs_items: bool = True
-    item_name: Callable[[T], str] = lambda x: x.name
-    item_value: Callable[[T], Any] = lambda x: x.cls
-
-
-@dataclass
-class NamedTree(Generic[T]):
-    name: str
-    config: NamedTreeConfig[T]
-    root: bool = False
-    exposed: Dict[str, T] = field(default_factory=dict, init=False)
-    leafs: Dict[str, "NamedTree"] = field(default_factory=dict, init=False)
-
-    def _expose_item(self, item: T, only_attr: bool = True):
-        name = self.config.item_name(item)
-        assert (
-            name not in self.leafs
-        ), f"Cannot add item with name '{name}' ({item}) because it has the same name as a group."
-        if not only_attr:
-            self.exposed[name] = item
-
-        if self.config.expose_leafs_items:
-            setattr(self, name, self.config.item_value(item))
-
-    def add_item(self, item: T, hierarchy: Optional[List[str]]) -> Tuple[Optional[str], "NamedTree"]:
-        self._expose_item(item, only_attr=bool(hierarchy))
-        if not hierarchy:
-            return None, self
-
-        leaf_name, *rest = hierarchy
-        if not hasattr(self, leaf_name):
-            leaf = NamedTree(name=leaf_name, config=self.config)
-            setattr(self, leaf_name, leaf)
-            self.leafs[leaf_name] = leaf
-
-        self.leafs[leaf_name].add_item(item, hierarchy=rest)
-
-        return leaf_name, self.leafs[leaf_name]
-
-    def all_items(self) -> Dict[str, T]:
-        items: Dict[str, T] = dict(self.exposed)
-        for leafs in self.leafs.values():
-            items.update(leafs.all_items())
-
-        return items
-
-    def __getitem__(self, name: str) -> T:
-        # HACK Quick and dirty, should split the path and access recursively
-        return dict(self.as_list())[name]
-
-    def as_dict(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "items": list(self.exposed.keys()),
-            **{gname: grp.as_dict() for gname, grp in self.leafs.items()},
-        }
-
-    def __len__(self) -> int:
-        return len(self.exposed) + sum(len(l) for l in self.leafs.values())
-
-    def _as_list(self) -> List[Tuple[List[str], T]]:
-        """Return a list of (path, item). The path is a list of node taken up to access the item. It is
-        constructed in reverse order for performance reasons (faster to add to the end of a list)"""
-
-        def _add_node_name(l: List[str]) -> List[str]:
-            # We don't add the root name
-            if self.root:
-                return l
-            else:
-                return l + [self.name]
-
-        sublist = []
-        # Add items exposed on this node
-        for name, item in self.exposed.items():
-            sublist.append((_add_node_name([name]), item))
-
-        for l in self.leafs.values():
-            for hierarchy, item in l._as_list():
-                sublist.append((_add_node_name(hierarchy), item))
-
-        return sublist
-
-    def as_list(self, joiner=".") -> List[Tuple[str, T]]:
-        lst = []
-        for hierarchy, item in self._as_list():
-            lst.append((joiner.join(reversed(hierarchy)), item))
-        return lst
-
-    def add_arguments(
-        self, parser: ArgumentParser, path: List[str], process_parser_kwargs: Dict[str, Any] = {}, **kwargs
-    ):
-        this_parser = parser.add_subparsers(title=self.name)
-
-        # Add exposed
-        for process_name, external_process in self.exposed.items():
-            process_parser = this_parser.add_parser(process_name, **process_parser_kwargs)
-            process_parser.set_defaults(function_name=".".join(path + [process_name]))
-            external_process.process.add_arguments(process_parser, **kwargs)
-
-        for leaf in self.leafs.values():
-            leaf_parser = this_parser.add_parser(leaf.name)
-            leaf_parser.set_defaults(function_name=".".join(path + [leaf.name]))
-            leaf.add_arguments(leaf_parser, path + [leaf.name], process_parser_kwargs=process_parser_kwargs, **kwargs)
 
 
 @dataclass
 class Plugin:
     name: str
     module: str  # TODO Is not really the expected module path, see what we can do about it
-    _commands: NamedTree[ExternalCommand] = field(
-        default_factory=lambda: NamedTree[ExternalCommand](
-            name="__cmds__", config=NamedTreeConfig(expose_leafs_items=True), root=True
+    commands: AttrTree[ExternalCommand] = field(
+        default_factory=lambda: AttrTree[ExternalCommand](
+            config=AttrTreeConfig(expose_leafs_items=True, item_name=lambda x: x.name, item_value=lambda x: x.cls),
         ),
         init=False,
     )
-    _processes: NamedTree[ExternalProcess] = field(
-        default_factory=lambda: NamedTree[ExternalProcess](
-            name="__processes__", config=NamedTreeConfig(expose_leafs_items=False), root=True
+    processes: AttrTree[ExternalProcess] = field(
+        default_factory=lambda: AttrTree[ExternalProcess](
+            config=AttrTreeConfig(expose_leafs_items=False, item_name=lambda x: x.name, item_value=lambda x: x.process),
         ),
         init=False,
     )
 
     def __str__(self) -> str:
-        return f"<Plugin {self.name}: commands={len(self._commands)}, processes={len(self._processes)}>"
+        return f"<Plugin {self.name}: commands={len(self.commands)}, processes={len(self.processes)}>"
 
     def __repr__(self) -> str:
         return str(self)
 
+    # def __getattr__(self, name):
+    #     if hasattr(self.processes, name):
+    #         return getattr(self.processes, name)
+    #     else:
+    #         return getattr(self.commands, name)
+
+    # def __dir__(self) -> List[str]:
+    #     d = super().__dir__()
+    #     dp = self.processes.__dir__()
+    #     dc = self.commands.__dir__()
+    #     return d + dp + dc
+
     def add_command(self, cmd: ExternalCommand):
-        setattr(self, cmd.cls.__name__, cmd.cls)
-        group_name, group = self._commands.add_item(cmd, hierarchy=self.hierarchy_for_command(cmd))
-        if group_name and not hasattr(self, group_name):
-            setattr(self, group_name, group)
+        self.commands.add_item(cmd, path=".".join(self.hierarchy_for_command(cmd)))
 
     def add_process(self, process: ExternalProcess):
-        group_name, group = self._processes.add_item(process, hierarchy=self.hierarchy_for_process(process))
-        if group_name and not hasattr(self, group_name):
-            setattr(self, group_name, group)
+        self.processes.add_item(process, path=".".join(self.hierarchy_for_process(process)))
 
-    def hierarchy_for_process(self, process: ExternalProcess) -> Optional[List[str]]:
-        if process.export_path:
-            return process.export_path.split(".")
-        else:
-            return None
+    def hierarchy_for_process(self, process: ExternalProcess) -> List[str]:
+        path = process.export_path or ""
+        return path.split(".")
 
-    def hierarchy_for_command(self, cmd: ExternalCommand) -> Optional[List[str]]:
-        if cmd.export_path:
-            return cmd.export_path.split(".")
-        else:
-            return None
+    def hierarchy_for_command(self, cmd: ExternalCommand) -> List[str]:
+        path = cmd.export_path or ""
+        return path.split(".")
 
     def all_commands(self) -> Dict[str, ExternalCommand]:
-        return self._commands.all_items()
+        return self.commands.as_dict()
 
     def as_dict(self) -> Dict[str, Any]:
-        return {"module": self.module, "commands": self._commands.as_dict(), "processes": self._processes.as_dict()}
+        return {"module": self.module, "commands": self.commands.as_dict(), "processes": self.processes.as_dict()}
 
     def add_arguments(self, parser: ArgumentParser, process_parser_kwargs: Dict[str, Any] = {}, **kwargs):
-        parser.set_defaults(retrieve_func=lambda func_name: self._processes[func_name].process, function_name=self.name)
-        self._processes.add_arguments(parser, path=[], process_parser_kwargs=process_parser_kwargs, **kwargs)
+        parser.set_defaults(retrieve_func=lambda func_name: self.processes[func_name].process, function_name=self.name)
+
+        parsers_sub: Dict[str, _SubParsersAction] = {"": parser.add_subparsers(title="actions")}
+
+        def get_or_create_module_parser(path: str) -> _SubParsersAction:
+            if path not in parsers_sub:
+                *parents, this = path.rsplit(".", 1)
+                parent_parser = get_or_create_module_parser(parents[0] if parents else "")
+
+                this_parser = parent_parser.add_parser(this, **process_parser_kwargs)
+                this_parser.set_defaults(function_name=path)
+
+                parsers_sub[path] = this_parser.add_subparsers(title=this)
+
+            return parsers_sub[path]
+
+        for process_path, process in self.processes.as_list():
+            *parent, process_name = process_path.rsplit(".", 1)
+            this_parser = get_or_create_module_parser(parent[0] if parent else "")
+            process_parser = this_parser.add_parser(process_name)
+            process.add_arguments(process_parser, **kwargs)
 
 
 @dataclass
@@ -283,7 +198,7 @@ class PluginLoader:
 
         for plug_name, plug in self.plugins.items():
             print(plug.name, file=out)
-            proc_dict = plug._processes.as_dict()
+            proc_dict = plug.processes.as_dict()
 
             print_group(proc_dict, depth=0)
 
