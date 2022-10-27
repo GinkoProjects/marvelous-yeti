@@ -77,7 +77,7 @@ class Plugin:
         return {"module": self.module, "commands": self.commands.as_dict(), "processes": self.processes.as_dict()}
 
     def add_arguments(self, parser: ArgumentParser, process_parser_kwargs: Dict[str, Any] = {}, **kwargs):
-        parser.set_defaults(retrieve_func=lambda func_name: self.processes[func_name].process, function_name=self.name)
+        parser.set_defaults(retrieve_func=lambda func_name: self.processes[func_name], function_name=self.name)
 
         parsers_sub: Dict[str, _SubParsersAction] = {"": parser.add_subparsers(title="actions")}
 
@@ -97,6 +97,7 @@ class Plugin:
             *parent, process_name = process_path.rsplit(".", 1)
             this_parser = get_or_create_module_parser(parent[0] if parent else "")
             process_parser = this_parser.add_parser(process_name)
+            process_parser.set_defaults(function_name=process_path)
             process.add_arguments(process_parser, **kwargs)
 
 
