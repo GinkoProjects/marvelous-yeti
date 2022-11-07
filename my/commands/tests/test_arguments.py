@@ -63,6 +63,19 @@ def check_action_attributes(
     for action in actions:
         if action.dest in excluded:
             continue
+
+        # If action is a subparser, then we recursivecly check each of its parsers
+        if isinstance(action, argparse._SubParsersAction):
+            for parser_name, subparser in action.choices.items():
+                # TODO Should we exclude subparsers by name ?
+                # if parser_name in excluded:
+                #   continue
+                assert check_action_attributes(
+                    expected_arguments=expected_arguments[parser_name], actions=subparser._actions, excluded=excluded
+                )
+                actions_name.add(parser_name)
+            continue
+
         assert action.dest in expected_arguments
         actions_name.add(action.dest)
         expected_action = expected_arguments[action.dest]
