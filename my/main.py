@@ -12,7 +12,7 @@ from typing import Union
 from my.commands import (HIDDEN_ARGUMENT, OPTIONAL_ARGUMENT, REQUIRED_ARGUMENT,
                          Command, CommandBinaryMode, Print,
                          SequentialProcessRunner, StdinConverter)
-from my.plugins import loader
+from my.plugins import PluginLoader, loader
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ def run_process_cli(args):
         sub = subprocess.Popen(new_args, **std_redir)
 
 
-def create_argument_parser() -> ArgumentParser:
+def create_argument_parser(plugin_loader: PluginLoader) -> ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Manage processes", formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
@@ -88,7 +88,7 @@ def create_argument_parser() -> ArgumentParser:
 
     # run_parser = subparsers.add_parser("run", help="Run processes")
     # process_subparsers = parser.add_subparsers(dest="name", metavar="command")
-    for plug_name, plug in loader.plugins.items():
+    for plug_name, plug in plugin_loader.plugins.items():
         # process_parser = process_subparsers.add_parser(plug_name, parents=[process_config_parser])
         plug.add_arguments(parser, process_parser_kwargs={"parents": [process_config_parser]}, add_all_fields=True)
 
@@ -98,7 +98,7 @@ def create_argument_parser() -> ArgumentParser:
 
 
 def main():
-    parser = create_argument_parser()
+    parser = create_argument_parser(plugin_loader=loader)
 
     args = parser.parse_args()
     if args.debug:

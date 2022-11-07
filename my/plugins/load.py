@@ -83,13 +83,13 @@ class Plugin:
 
         def get_or_create_module_parser(path: str) -> _SubParsersAction:
             if path not in parsers_sub:
-                *parents, this = path.rsplit(".", 1)
+                *parents, parser_name = path.rsplit(".", 1)
                 parent_parser = get_or_create_module_parser(parents[0] if parents else "")
 
-                this_parser = parent_parser.add_parser(this, **process_parser_kwargs)
+                this_parser = parent_parser.add_parser(parser_name, **process_parser_kwargs)
                 this_parser.set_defaults(function_name=path)
 
-                parsers_sub[path] = this_parser.add_subparsers(title=this)
+                parsers_sub[path] = this_parser.add_subparsers(title=parser_name)
 
             return parsers_sub[path]
 

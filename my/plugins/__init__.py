@@ -13,7 +13,7 @@ else:
 logger = logging.getLogger(__name__)
 
 
-def load_plugins(loader):
+def load_plugins(loader: PluginLoader):
     for _plug_entrypoint in entry_points(group="my.plugins.command"):
         logger.info("loading command %s", _plug_entrypoint)
         loader.load_command(_plug_entrypoint)
@@ -42,6 +42,7 @@ def expose_plugins(loader):
     return loaded
 
 
-plugin_loader = PluginLoader()
-load_plugins(plugin_loader)
-__all__ = expose_plugins(plugin_loader)
+# The PluginLoader is exposed as "loader" by `expose_plugins`
+_plugin_loader = PluginLoader()
+load_plugins(_plugin_loader)
+__all__ = expose_plugins(_plugin_loader)
