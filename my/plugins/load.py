@@ -96,7 +96,7 @@ class Plugin:
         for process_path, process in self.processes.as_list():
             *parent, process_name = process_path.rsplit(".", 1)
             this_parser = get_or_create_module_parser(parent[0] if parent else "")
-            process_parser = this_parser.add_parser(process_name)
+            process_parser = this_parser.add_parser(process_name, **process_parser_kwargs)
             process_parser.set_defaults(function_name=process_path)
             process.add_arguments(process_parser, **kwargs)
 
