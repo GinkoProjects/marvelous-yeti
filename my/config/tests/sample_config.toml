@@ -1,0 +1,22 @@
+[my]
+debug = false
+
+[my.plugins.process."remarkable__send"]
+entrypoint = "/home/cranium/Projects/reMarkable/Books/send.sh"
+entrypoint_type = "zsh"
+
+[my.plugins.module."rg_commands"]
+make_sense = false
+
+[my.plugins.command."kitty"]
+normal_size = "200x80"
+
+[my.plugins.registry."emacs__commands"]
+emacsclient = "emacsclient"
+emacs_socket_name = "/run/user/1000/emacs/server"
+
+[my.plugins.registry."accounting"]
+working_directory = "/home/cranium/Projects/Accounting/ginko/"
+
+[my.plugins.process."pomodoro__complete"]
+show_on_lametric = true
