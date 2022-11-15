@@ -131,7 +131,7 @@ class CommandProcessRunner(ProcessRunner):
                 line = orig_line[:-1]
                 line = line if self.text else line.decode("utf-8")
                 if stdout:
-                    stdout.write(orig_line)
+                    stdout.write(line)
                 yield line
 
             while stderr_poll.poll(1) and proc_stderr is not None:
