@@ -2,6 +2,7 @@ import argparse
 import contextlib
 import json
 import logging
+import os
 import random
 import subprocess
 import sys
@@ -36,6 +37,11 @@ def send_notification(*args, **kwargs):
         return
 
     if not _notify_init:
+        new_env = {
+            "DISPLAY": ":0",
+            "DBUS_SESSION_BUS_ADDRESS": "unix:path=/run/user/1000/bus",
+        }
+        os.environ.update(new_env)
         init("my-yeti")
         _notify_init = True
 
