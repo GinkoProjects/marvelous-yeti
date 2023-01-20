@@ -62,6 +62,10 @@ class ProcessRunner(ExposeArguments):
 
         return SequentialProcessRunner(self, other, piped=True)
 
+    def description(self, description):
+        self._description = description
+        return self
+
 
 @dataclass
 class CommandProcessRunner(ProcessRunner):
