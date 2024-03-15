@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "yeti-example"
+version = "0.1.0"
+description = ""
+authors = ["Romain Gehrig <romain@ginko.pro>"]
+readme = "README.md"
+packages = [{include = "yeti_example"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+my-yeti = {git = "https://github.com/GinkoProjects/my-yeti.git"}
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.plugins."my.plugins.command"]
+notes__new = "yeti_example.notes:NewNote"
+notes__list = "yeti_example.notes:ListNotes"
+
+[tool.poetry.plugins."my.plugins.registry"]
+processes = "yeti_example.processes:processes"
